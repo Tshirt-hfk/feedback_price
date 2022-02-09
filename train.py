@@ -59,7 +59,7 @@ def main(args):
     model = LongformerSoftmaxForNer.from_pretrained("allenai/longformer-base-4096", config=config).cuda()
     criterion = LabelSmoothedCrossEntropyCriterion(eps=args.label_smoothing)
     optimizer = torch.optim.Adam(params=filter(lambda p: p.requires_grad, model.parameters()),
-                                 lr=args.lr, betas=args.betas, weight_decay=args.weight_decay)
+                                 lr=args.lr, betas=(args.betas0, args.betas1), weight_decay=args.weight_decay)
     lr_schedule = InverseSquareRootSchedule(optimizer, lr=args.lr, warmup_updates=args.warmup_updates)
 
     zero_time = time.time()
@@ -115,6 +115,8 @@ def validate(valid_loader, model, criterion):
         total_input.extend(input.to_numpy())
         total_label.extend(label.to_numpy())
         total_mask.extend(mask.to_numpy())
+        total_loss += loss.item()
+        total_num_tokens += num_token.item()
     return total_loss / total_num_tokens, compute_metrics(total_input, total_label, total_mask)
 
 
@@ -125,4 +127,5 @@ def test():
 if __name__ == "__main__":
     with open("./configs.yaml", 'r') as fin:
         args = Arguments(yaml.load(fin, Loader=yaml.FullLoader))
+    print(args.__dict__)
     main(args)
