@@ -15,14 +15,14 @@ num_labels = len(id2label)
 
 
 def load_data(tokenizer):
-    if os.path.exists("data/feedback-prize/data.csv"):
-        data = pd.read_csv('data/feedback-prize/data.csv', encoding='utf8')
+    if os.path.exists("data/data.csv"):
+        data = pd.read_csv('data/data.csv', encoding='utf8')
     else:
-        data = pd.read_csv('data/feedback-prize/train.csv', encoding='utf8')[["id", "discourse_text", "discourse_type"]]
+        data = pd.read_csv('data/train.csv', encoding='utf8')[["id", "discourse_text", "discourse_type"]]
         data.discourse_text = data.discourse_text.map(
             lambda x: " ".join(x.split()))
         data_names, data_texts = [], []
-        for f in tqdm(list(os.listdir('./data/feedback-prize/train'))):
+        for f in tqdm(list(os.listdir('data/train'))):
             data_names.append(f.replace('.txt', ''))
             data_texts.append(open('./data/feedback-prize/train/' + f, 'r', encoding="utf8").read())
         data_texts = pd.DataFrame({'id': data_names, 'text': data_texts})
