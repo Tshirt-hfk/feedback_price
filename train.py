@@ -16,36 +16,18 @@ from labelSmoothedCrossEntropy import LabelSmoothedCrossEntropyCriterion
 from model import LongformerSoftmaxForNer
 from utils import Arguments
 
-CFG = {
-    'fold_num': 5,
-    'seed': 42,
-    'model': './data/roberta-base',
-    'max_len': 512,
-    'epochs': 3,
-    'train_bs': 16,
-    'valid_bs': 32,
-    'lr': 1e-4,
-    'num_workers': 0,
-    'weight_decay': 1e-5,
-}
-
 
 # 定义评价指标
 def compute_metrics(predictions, labels, masks):
-    predictions = np.argmax(predictions, axis=2)
-
-    true_predictions = [[id2label[p] for (p, m) in zip(prediction, mask) if m] for prediction, mask in
-                        zip(predictions, masks)]
-    true_labels = [[id2label[l] for (l, m) in zip(labels, mask) if m] for labels, mask in
-                   zip(labels, masks)]
-    accuracy, precision, recall, f1 = [], [], [], []
-    for prediction, label in zip(true_predictions, true_labels):
-        accuracy.append(metrics.accuracy_score(y_pred=prediction, y_true=label))
-        precision.append(metrics.precision_score(y_pred=prediction, y_true=label))
-        recall.append(metrics.recall_score(y_pred=prediction, y_true=label))
-        f1.append(metrics.f1_score(y_pred=prediction, y_true=label))
-    return {"precision": sum(precision)/len(precision), "recall": sum(recall)/len(recall),
-            "accuracy": sum(accuracy)/len(accuracy), "f1": sum(f1)/len(f1)}
+    predictions = sum([[p for (p, m) in zip(prediction, mask) if m] for prediction, mask in
+                       zip(predictions, masks)], [])
+    labels = sum([[l for (l, m) in zip(labels, mask) if m] for labels, mask in
+                  zip(labels, masks)], [])
+    accuracy = metrics.accuracy_score(y_pred=predictions, y_true=labels)
+    precision = metrics.precision_score(y_pred=predictions, y_true=labels, average='macro')
+    recall = metrics.recall_score(y_pred=predictions, y_true=labels, average='macro')
+    f1 = metrics.f1_score(y_pred=predictions, y_true=labels, average='macro')
+    return {"accuracy": accuracy, "precision": precision, "recall": recall, "f1": f1}
 
 
 def main(args):
@@ -79,7 +61,7 @@ def main(args):
             'valid_precision: %.3f valid_recall: %.3f valid_accuracy: %.3f valid_f1: %.3f' % (
                 str(datetime.timedelta(seconds=int(total_time))), epoch,
                 str(datetime.timedelta(seconds=int(epoch_time))), train_loss, val_loss, lr_schedule.get_lr(),
-                val_metric['precision'], val_metric['recall'], val_metric['accuracy'], val_metric['f1'] ))
+                val_metric['precision'], val_metric['recall'], val_metric['accuracy'], val_metric['f1']))
 
 
 def train(train_loader, model, criterion, optimizer, lr_schedule):
@@ -105,19 +87,19 @@ def validate(valid_loader, model, criterion):
     model.eval()
     total_loss = 0
     total_num_tokens = 0
-    total_input = []
+    total_predictions = []
     total_label = []
     total_mask = []
     for input, label, mask in valid_loader:
         input, label, mask = input.cuda(), label.cuda(), mask.cuda()
         output = model(input_ids=input, attention_mask=mask)
         loss, num_token = criterion(output, label, mask)
-        total_input.extend(input.to_numpy())
-        total_label.extend(label.to_numpy())
-        total_mask.extend(mask.to_numpy())
+        total_predictions.extend(output.max(dim=-1)[1].tolist())
+        total_label.extend(label.tolist())
+        total_mask.extend(mask.tolist())
         total_loss += loss.item()
         total_num_tokens += num_token.item()
-    return total_loss / total_num_tokens, compute_metrics(total_input, total_label, total_mask)
+    return total_loss / total_num_tokens, compute_metrics(total_predictions, total_label, total_mask)
 
 
 def test():
