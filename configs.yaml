@@ -1,4 +1,4 @@
-lr: 0.0005
+lr: 0.001
 betas0: 0.9
 betas1: 0.98
 weight_decay: 0.00001

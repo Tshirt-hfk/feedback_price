@@ -14,8 +14,8 @@ label2id = {tag: idx for idx, tag in enumerate(id2label)}
 num_labels = len(id2label)
 
 
-def load_data(tokenizer):
-    if os.path.exists("data/train_data.csv"):
+def load_data(tokenizer, read_cache=True):
+    if read_cache and os.path.exists("data/train_data.csv"):
         data = pd.read_csv('data/train_data.csv', encoding='utf8')
     else:
         data = pd.read_csv('data/train.csv', encoding='utf8')[["id", "discourse_text", "discourse_type"]]
@@ -41,8 +41,8 @@ def load_data(tokenizer):
     return data[:13000], data[13000:]
 
 
-def load_test_data(tokenizer):
-    if os.path.exists("data/test_data.csv"):
+def load_test_data(tokenizer, read_cache=True):
+    if read_cache and os.path.exists("data/test_data.csv"):
         data = pd.read_csv('data/test_data.csv', encoding='utf8')
     else:
         data_names, data_texts = [], []
@@ -51,7 +51,7 @@ def load_test_data(tokenizer):
             data_texts.append(open('./data/test/' + f, 'r', encoding="utf8").read())
         data = pd.DataFrame({'id': data_names, 'text': data_texts})
         data.text = data.text.map(lambda x: " ".join(x.split()))
-        data['label'] = data.apply(lambda row: [0, len(row['text']), 'O'], axis=1)
+        data['label'] = data.apply(lambda row: [], axis=1)
         data.label = data.label.apply(json.dumps)
         data.to_csv("data/test_data.csv", index=False, encoding='utf8')
     data.label = data.label.apply(json.loads)

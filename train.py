@@ -1,6 +1,6 @@
 import datetime
 import time
-
+import pandas as pd
 import torch
 import yaml
 from sklearn import metrics
@@ -8,7 +8,6 @@ from torch.utils.data import DataLoader
 from transformers import AutoTokenizer, LongformerConfig
 
 from dataloader import load_data, FPDataset, num_labels, id2label, label2id, load_test_data
-from inverseSquareRootSchedule import InverseSquareRootSchedule
 from labelSmoothedCrossEntropy import LabelSmoothedCrossEntropyCriterion
 from model import LongformerSoftmaxForNer
 from utils import Arguments
@@ -25,6 +24,35 @@ def compute_metrics(predictions, labels, masks):
     recall = metrics.recall_score(y_pred=predictions, y_true=labels, average='macro')
     f1 = metrics.f1_score(y_pred=predictions, y_true=labels, average='macro')
     return {"accuracy": accuracy, "precision": precision, "recall": recall, "f1": f1}
+
+
+def save_test(ids, inputs, preds, tokenizer, f="data/test_result.csv"):
+    inputs = [tokenizer.convert_ids_to_tokens(sent) for sent in inputs]
+    res = []
+    for idx, sent, pred in zip(ids, inputs, preds):
+        num = 0
+        pre_idx = 0
+        pre_label = "O"
+        for x, (word, label_id) in enumerate(zip(sent[1:-1], pred[1:-1])):
+            label = id2label[label_id]
+            if x == 0 or word[0] == "Ġ":
+                num += 1
+            else:
+                continue
+            if label == "O":
+                if pre_idx > 0:
+                    res.append((idx, pre_label, " ".join([str(i) for i in range(pre_idx, num)])))
+                    pre_idx = 0
+                    pre_label = "O"
+            elif label[:1] == "B":
+                pre_idx = num
+                pre_label = label[2:]
+            elif label[:1] == "I":
+                if pre_label != label[2:]:
+                    pre_idx = 0
+                    pre_label = "O"
+    res = pd.DataFrame(res, columns=["id", "class", "predictionstring"])
+    res.to_csv(f, index=False, encoding='utf8')
 
 
 def main(args):
@@ -61,14 +89,17 @@ def main(args):
                   str(datetime.timedelta(seconds=int(epoch_time))), train_loss, val_loss,
                   val_metric['accuracy'], val_metric['precision'], val_metric['recall'], val_metric['f1']))
 
+    ids, inputs, predictions = test(test_loader, model)
+    save_test(ids, inputs, predictions, tokenizer=tokenizer)
+
 
 def train(train_loader, model, criterion, optimizer):
     model.train()
     total_loss = 0
     total_num_tokens = 0
-    for _, input, label, mask in train_loader:
-        input, label, mask = input.cuda(), label.cuda(), mask.cuda()
-        output = model(input_ids=input, attention_mask=mask)
+    for _, inputs, label, mask in train_loader:
+        inputs, label, mask = inputs.cuda(), label.cuda(), mask.cuda()
+        output = model(input_ids=inputs, attention_mask=mask)
         loss, num_token = criterion(output, label, mask)
         optimizer.zero_grad()
         loss.backward()
@@ -87,9 +118,9 @@ def validate(valid_loader, model, criterion):
     total_predictions = []
     total_label = []
     total_mask = []
-    for _, input, label, mask in valid_loader:
-        input, label, mask = input.cuda(), label.cuda(), mask.cuda()
-        output = model(input_ids=input, attention_mask=mask)
+    for _, inputs, label, mask in valid_loader:
+        inputs, label, mask = inputs.cuda(), label.cuda(), mask.cuda()
+        output = model(input_ids=inputs, attention_mask=mask)
         loss, num_token = criterion(output, label, mask)
         total_predictions.extend(output.max(dim=-1)[1].tolist())
         total_label.extend(label.tolist())
@@ -99,18 +130,22 @@ def validate(valid_loader, model, criterion):
     return total_loss / total_num_tokens, compute_metrics(total_predictions, total_label, total_mask)
 
 
-def validate(valid_loader, model):
+def test(test_loader, model):
     model.eval()
+    total_inputs = []
     predictions = []
     masks = []
     ids = []
-    for idx, input, _, mask in valid_loader:
-        input, mask = input.cuda(), mask.cuda()
-        output = model(input_ids=input, attention_mask=mask)
+    for idx, inputs, _, mask in test_loader:
+        inputs, mask = inputs.cuda(), mask.cuda()
+        output = model(input_ids=inputs, attention_mask=mask)
+        total_inputs.extend(inputs.tolist())
         predictions.extend(output.max(dim=-1)[1].tolist())
-        mask.extend(mask.tolist())
-        ids.extend(idx.tolist())
+        masks.extend(mask.tolist())
+        ids.extend(idx)
+    inputs = [[i for (i, m) in zip(inputs, mask) if m] for inputs, mask in zip(total_inputs, masks)]
     predictions = [[p for (p, m) in zip(prediction, mask) if m] for prediction, mask in zip(predictions, masks)]
+    return ids, inputs, predictions
 
 
 if __name__ == "__main__":
