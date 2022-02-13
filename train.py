@@ -8,6 +8,7 @@ from torch.utils.data import DataLoader
 from transformers import AutoTokenizer, LongformerConfig
 
 from dataloader import load_data, FPDataset, num_labels, id2label, label2id, load_test_data
+from inverseSquareRootSchedule import InverseSquareRootSchedule
 from labelSmoothedCrossEntropy import LabelSmoothedCrossEntropyCriterion
 from model import LongformerSoftmaxForNer
 from utils import Arguments
@@ -26,7 +27,7 @@ def compute_metrics(predictions, labels, masks):
     return {"accuracy": accuracy, "precision": precision, "recall": recall, "f1": f1}
 
 
-def save_test(ids, inputs, preds, tokenizer, f="data/test_result.csv"):
+def save_test(ids, inputs, preds, tokenizer, f):
     inputs = [tokenizer.convert_ids_to_tokens(sent) for sent in inputs]
     res = []
     for idx, sent, pred in zip(ids, inputs, preds):
@@ -60,6 +61,7 @@ def save_test(ids, inputs, preds, tokenizer, f="data/test_result.csv"):
 
 def main(args):
     cp_file = args.RESULT_DIR + '/' + "best_model.pt"
+    result_file = args.RESULT_DIR + '/' + "test_result.csv"
     tokenizer = AutoTokenizer.from_pretrained("allenai/longformer-base-4096")
     train_data, valid_data = load_data(tokenizer)
     test_data = load_test_data(tokenizer)
@@ -74,12 +76,13 @@ def main(args):
     criterion = LabelSmoothedCrossEntropyCriterion(eps=args.label_smoothing)
     optimizer = torch.optim.Adam(params=filter(lambda p: p.requires_grad, model.parameters()),
                                  lr=args.lr, betas=(args.betas0, args.betas1))
+    lr_schedule = InverseSquareRootSchedule(optimizer, lr=args.lr, warmup_updates=args.warmup_updates)
     best_val_f1 = 0
     zero_time = time.time()
     for epoch in range(args.epochs):
         start_time = time.time()
 
-        train_loss = train(train_loader, model, criterion, optimizer)
+        train_loss = train(train_loader, model, criterion, optimizer, lr_schedule)
         val_loss, val_metric = validate(valid_loader, model, criterion)
 
         end_time = time.time()
@@ -101,10 +104,10 @@ def main(args):
     print("load best model!!!")
     model.load_state_dict(torch.load(cp_file)['state_dict'])
     ids, inputs, predictions = test(test_loader, model)
-    save_test(ids, inputs, predictions, tokenizer=tokenizer)
+    save_test(ids, inputs, predictions, tokenizer=tokenizer, f=result_file)
 
 
-def train(train_loader, model, criterion, optimizer):
+def train(train_loader, model, criterion, optimizer, lr_schedule):
     model.train()
     total_loss = 0
     total_num_tokens = 0
@@ -114,6 +117,7 @@ def train(train_loader, model, criterion, optimizer):
         loss, num_token = criterion(output, label, mask)
         optimizer.zero_grad()
         loss.backward()
+        lr_schedule.step()
         optimizer.step()
         # Keep track of metrics
         total_loss += loss.item()

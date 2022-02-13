@@ -3,7 +3,7 @@
 class InverseSquareRootSchedule:
     """Optim wrapper that implements rate."""
 
-    def __init__(self, optimizer, lr, warmup_updates, warmup_init_lr=1e-6):
+    def __init__(self, optimizer, lr, warmup_updates, warmup_init_lr=1e-9):
         self.step_num = 0
         self._lr = 0
         self._optimizer = optimizer
