@@ -1,4 +1,4 @@
-lr: 5e-5
+lr: 0.00005
 betas0: 0.9
 betas1: 0.98
 label_smoothing: 0.1
@@ -6,6 +6,5 @@ warmup_updates: 500
 
 batch_size: 4096
 epochs: 5
-seed: 123
 
 RESULT_DIR: results

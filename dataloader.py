@@ -21,7 +21,7 @@ def load_data(tokenizer):
     data_names, data_texts = [], []
     for f in tqdm(list(os.listdir('data/train'))):
         data_names.append(f.replace('.txt', ''))
-        data_texts.append(open('./data/train/' + f, 'r', encoding="utf8").read())
+        data_texts.append(open('data/train/' + f, 'r', encoding="utf8").read())
     data_texts = pd.DataFrame({'id': data_names, 'text': data_texts})
     data_texts.text = data_texts.text.map(lambda x: " ".join(x.split()))
     data = pd.merge(data_texts, data, how='left', on=['id'])
@@ -39,7 +39,7 @@ def load_test_data(tokenizer):
     data_names, data_texts = [], []
     for f in tqdm(list(os.listdir('data/test'))):
         data_names.append(f.replace('.txt', ''))
-        data_texts.append(open('./data/test/' + f, 'r', encoding="utf8").read())
+        data_texts.append(open('data/test/' + f, 'r', encoding="utf8").read())
     data = pd.DataFrame({'id': data_names, 'text': data_texts})
     data.text = data.text.map(lambda x: " ".join(x.split()))
     data['label'] = data.apply(lambda row: [], axis=1)

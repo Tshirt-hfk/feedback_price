@@ -133,15 +133,16 @@ def validate(valid_loader, model, criterion):
     total_predictions = []
     total_label = []
     total_mask = []
-    for _, inputs, label, mask in valid_loader:
-        inputs, label, mask = inputs.cuda(), label.cuda(), mask.cuda()
-        output = model(input_ids=inputs, attention_mask=mask)
-        loss, num_token = criterion(output, label, mask)
-        total_predictions.extend(output.max(dim=-1)[1].tolist())
-        total_label.extend(label.tolist())
-        total_mask.extend(mask.tolist())
-        total_loss += loss.item()
-        total_num_tokens += num_token.item()
+    with torch.no_grad():
+        for _, inputs, label, mask in valid_loader:
+            inputs, label, mask = inputs.cuda(), label.cuda(), mask.cuda()
+            output = model(input_ids=inputs, attention_mask=mask)
+            loss, num_token = criterion(output, label, mask)
+            total_predictions.extend(output.max(dim=-1)[1].tolist())
+            total_label.extend(label.tolist())
+            total_mask.extend(mask.tolist())
+            total_loss += loss.item()
+            total_num_tokens += num_token.item()
     return total_loss / total_num_tokens, compute_metrics(total_predictions, total_label, total_mask)
 
 
@@ -151,13 +152,14 @@ def test(test_loader, model):
     predictions = []
     masks = []
     ids = []
-    for idx, inputs, _, mask in test_loader:
-        inputs, mask = inputs.cuda(), mask.cuda()
-        output = model(input_ids=inputs, attention_mask=mask)
-        total_inputs.extend(inputs.tolist())
-        predictions.extend(output.max(dim=-1)[1].tolist())
-        masks.extend(mask.tolist())
-        ids.extend(idx)
+    with torch.no_grad():
+        for idx, inputs, _, mask in test_loader:
+            inputs, mask = inputs.cuda(), mask.cuda()
+            output = model(input_ids=inputs, attention_mask=mask)
+            total_inputs.extend(inputs.tolist())
+            predictions.extend(output.max(dim=-1)[1].tolist())
+            masks.extend(mask.tolist())
+            ids.extend(idx)
     inputs = [[i for (i, m) in zip(inputs, mask) if m] for inputs, mask in zip(total_inputs, masks)]
     predictions = [[p for (p, m) in zip(prediction, mask) if m] for prediction, mask in zip(predictions, masks)]
     return ids, inputs, predictions
