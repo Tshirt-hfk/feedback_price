@@ -43,7 +43,6 @@ def load_test_data(tokenizer):
     data = pd.DataFrame({'id': data_names, 'text': data_texts})
     data.text = data.text.map(lambda x: " ".join(x.split()))
     data['label'] = data.apply(lambda row: [], axis=1)
-    data.label = data.label.apply(json.dumps)
     data['label'] = data.apply(handleLabel, args=(tokenizer,), axis=1)
     data['text'] = data['text'].apply(lambda x: tokenizer(x)["input_ids"])
     return data
