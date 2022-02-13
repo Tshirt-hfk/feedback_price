@@ -14,47 +14,36 @@ label2id = {tag: idx for idx, tag in enumerate(id2label)}
 num_labels = len(id2label)
 
 
-def load_data(tokenizer, read_cache=True):
-    if read_cache and os.path.exists("data/train_data.csv"):
-        data = pd.read_csv('data/train_data.csv', encoding='utf8')
-    else:
-        data = pd.read_csv('data/train.csv', encoding='utf8')[["id", "discourse_text", "discourse_type"]]
-        data.discourse_text = data.discourse_text.map(
-            lambda x: " ".join(x.split()))
-        data_names, data_texts = [], []
-        for f in tqdm(list(os.listdir('data/train'))):
-            data_names.append(f.replace('.txt', ''))
-            data_texts.append(open('./data/train/' + f, 'r', encoding="utf8").read())
-        data_texts = pd.DataFrame({'id': data_names, 'text': data_texts})
-        data_texts.text = data_texts.text.map(lambda x: " ".join(x.split()))
-        data = pd.merge(data_texts, data, how='left', on=['id'])
-        data['label'] = data.apply(lambda row: [row['text'].find(row['discourse_text']),
-                                                row['text'].find(row['discourse_text']) +
-                                                len(row['discourse_text'])], axis=1)
-        data['label'] = data['label'] + data['discourse_type'].map(lambda x: [x])
-        data = data.groupby("id").agg(text=("text", lambda x: x.iloc[0]), label=("label", list)).reset_index()
-        data.label = data.label.apply(json.dumps)
-        data.to_csv("data/train_data.csv", index=False, encoding='utf8')
-    data.label = data.label.apply(json.loads)
+def load_data(tokenizer):
+    data = pd.read_csv('data/train.csv', encoding='utf8')[["id", "discourse_text", "discourse_type"]]
+    data.discourse_text = data.discourse_text.map(
+        lambda x: " ".join(x.split()))
+    data_names, data_texts = [], []
+    for f in tqdm(list(os.listdir('data/train'))):
+        data_names.append(f.replace('.txt', ''))
+        data_texts.append(open('./data/train/' + f, 'r', encoding="utf8").read())
+    data_texts = pd.DataFrame({'id': data_names, 'text': data_texts})
+    data_texts.text = data_texts.text.map(lambda x: " ".join(x.split()))
+    data = pd.merge(data_texts, data, how='left', on=['id'])
+    data['label'] = data.apply(lambda row: [row['text'].find(row['discourse_text']),
+                                            row['text'].find(row['discourse_text']) +
+                                            len(row['discourse_text'])], axis=1)
+    data['label'] = data['label'] + data['discourse_type'].map(lambda x: [x])
+    data = data.groupby("id").agg(text=("text", lambda x: x.iloc[0]), label=("label", list)).reset_index()
     data['label'] = data.apply(handleLabel, args=(tokenizer,), axis=1)
     data['text'] = data['text'].apply(lambda x: tokenizer(x)["input_ids"])
     return data[:13000], data[13000:]
 
 
-def load_test_data(tokenizer, read_cache=True):
-    if read_cache and os.path.exists("data/test_data.csv"):
-        data = pd.read_csv('data/test_data.csv', encoding='utf8')
-    else:
-        data_names, data_texts = [], []
-        for f in tqdm(list(os.listdir('data/test'))):
-            data_names.append(f.replace('.txt', ''))
-            data_texts.append(open('./data/test/' + f, 'r', encoding="utf8").read())
-        data = pd.DataFrame({'id': data_names, 'text': data_texts})
-        data.text = data.text.map(lambda x: " ".join(x.split()))
-        data['label'] = data.apply(lambda row: [], axis=1)
-        data.label = data.label.apply(json.dumps)
-        data.to_csv("data/test_data.csv", index=False, encoding='utf8')
-    data.label = data.label.apply(json.loads)
+def load_test_data(tokenizer):
+    data_names, data_texts = [], []
+    for f in tqdm(list(os.listdir('data/test'))):
+        data_names.append(f.replace('.txt', ''))
+        data_texts.append(open('./data/test/' + f, 'r', encoding="utf8").read())
+    data = pd.DataFrame({'id': data_names, 'text': data_texts})
+    data.text = data.text.map(lambda x: " ".join(x.split()))
+    data['label'] = data.apply(lambda row: [], axis=1)
+    data.label = data.label.apply(json.dumps)
     data['label'] = data.apply(handleLabel, args=(tokenizer,), axis=1)
     data['text'] = data['text'].apply(lambda x: tokenizer(x)["input_ids"])
     return data
@@ -65,7 +54,6 @@ def handleLabel(row, tokenizer):
     text = row["text"]
     labels = sorted(row["label"], key=lambda x: x[0])
     offset = tokenizer(text, return_offsets_mapping=True)["offset_mapping"][1:-1]
-
     i = idx = 0
     pre_idx = -1
     nlabels.append(label2id['O'])
@@ -149,8 +137,3 @@ if __name__ == "__main__":
     valid_dataset = FPDataset(valid_data, tokenizer)
     train_loader = DataLoader(dataset=train_dataset, batch_size=None, shuffle=True)
     valid_loader = DataLoader(dataset=valid_dataset, batch_size=None)
-    for idx, input, label, mask in train_loader:
-        x = input
-        y = label
-        m = mask
-        break

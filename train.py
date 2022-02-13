@@ -20,9 +20,9 @@ def compute_metrics(predictions, labels, masks):
     labels = sum([[l for (l, m) in zip(labels, mask) if m] for labels, mask in
                   zip(labels, masks)], [])
     accuracy = metrics.accuracy_score(y_pred=predictions, y_true=labels)
-    precision = metrics.precision_score(y_pred=predictions, y_true=labels, average='macro')
-    recall = metrics.recall_score(y_pred=predictions, y_true=labels, average='macro')
-    f1 = metrics.f1_score(y_pred=predictions, y_true=labels, average='macro')
+    precision = metrics.precision_score(y_pred=predictions, y_true=labels, average='micro')
+    recall = metrics.recall_score(y_pred=predictions, y_true=labels, average='micro')
+    f1 = metrics.f1_score(y_pred=predictions, y_true=labels, average='micro')
     return {"accuracy": accuracy, "precision": precision, "recall": recall, "f1": f1}
 
 
