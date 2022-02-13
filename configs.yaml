@@ -1,10 +1,10 @@
 lr: 0.001
 betas0: 0.9
 betas1: 0.98
-weight_decay: 0.00001
 label_smoothing: 0.1
-warmup_updates: 4000
 
 batch_size: 4096
 epochs: 3
 seed: 123
+
+RESULT_DIR: results

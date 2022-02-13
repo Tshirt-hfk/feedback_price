@@ -30,8 +30,8 @@ def save_test(ids, inputs, preds, tokenizer, f="data/test_result.csv"):
     inputs = [tokenizer.convert_ids_to_tokens(sent) for sent in inputs]
     res = []
     for idx, sent, pred in zip(ids, inputs, preds):
-        num = 0
-        pre_idx = 0
+        num = -1
+        pre_idx = -1
         pre_label = "O"
         for x, (word, label_id) in enumerate(zip(sent[1:-1], pred[1:-1])):
             label = id2label[label_id]
@@ -39,23 +39,27 @@ def save_test(ids, inputs, preds, tokenizer, f="data/test_result.csv"):
                 num += 1
             else:
                 continue
-            if label == "O":
-                if pre_idx > 0:
+            if pre_idx < 0:
+                if label[:1] == "B":
+                    pre_idx = num
+                    pre_label = label[2:]
+            else:
+                if label[:1] == "I" and pre_label == label[2:]:
+                    continue
+                else:
                     res.append((idx, pre_label, " ".join([str(i) for i in range(pre_idx, num)])))
-                    pre_idx = 0
-                    pre_label = "O"
-            elif label[:1] == "B":
-                pre_idx = num
-                pre_label = label[2:]
-            elif label[:1] == "I":
-                if pre_label != label[2:]:
-                    pre_idx = 0
-                    pre_label = "O"
+                    if label[:1] == "B":
+                        pre_idx = num
+                        pre_label = label[2:]
+                    else:
+                        pre_idx = -1
+                        pre_label = "O"
     res = pd.DataFrame(res, columns=["id", "class", "predictionstring"])
     res.to_csv(f, index=False, encoding='utf8')
 
 
 def main(args):
+    cp_file = args.RESULT_DIR + '/' + "best_model.pt"
     tokenizer = AutoTokenizer.from_pretrained("allenai/longformer-base-4096")
     train_data, valid_data = load_data(tokenizer)
     test_data = load_test_data(tokenizer)
@@ -69,8 +73,8 @@ def main(args):
     model = LongformerSoftmaxForNer.from_pretrained("allenai/longformer-base-4096", config=config).cuda()
     criterion = LabelSmoothedCrossEntropyCriterion(eps=args.label_smoothing)
     optimizer = torch.optim.Adam(params=filter(lambda p: p.requires_grad, model.parameters()),
-                                 lr=args.lr, betas=(args.betas0, args.betas1), weight_decay=args.weight_decay)
-
+                                 lr=args.lr, betas=(args.betas0, args.betas1))
+    best_val_f1 = 0
     zero_time = time.time()
     for epoch in range(args.epochs):
         start_time = time.time()
@@ -88,7 +92,14 @@ def main(args):
                   str(datetime.timedelta(seconds=int(total_time))), epoch,
                   str(datetime.timedelta(seconds=int(epoch_time))), train_loss, val_loss,
                   val_metric['accuracy'], val_metric['precision'], val_metric['recall'], val_metric['f1']))
-
+        val_f1 = val_metric['f1']
+        if best_val_f1 < val_f1:
+            best_val_f1 = val_f1
+            torch.save({'epoch': epoch,
+                        'state_dict': model.state_dict(), 'optimizer': optimizer.state_dict(),
+                        }, cp_file)
+    print("load best model!!!")
+    model.load_state_dict(torch.load(cp_file)['state_dict'])
     ids, inputs, predictions = test(test_loader, model)
     save_test(ids, inputs, predictions, tokenizer=tokenizer)
 
